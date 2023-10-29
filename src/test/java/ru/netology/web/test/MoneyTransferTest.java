@@ -1,43 +1,63 @@
 package ru.netology.web.test;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import ru.netology.web.data.DataHelper;
+import ru.netology.web.page.DashboardPage;
 import ru.netology.web.page.LoginPageV1;
 import ru.netology.web.page.LoginPageV2;
 import ru.netology.web.page.LoginPageV3;
 
 import static com.codeborne.selenide.Selenide.open;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static ru.netology.web.data.DataHelper.*;
 
 class MoneyTransferTest {
-    @Test
-    void shouldTransferMoneyBetweenOwnCardsV1() {
-      open("http://localhost:9999");
-      var loginPage = new LoginPageV1();
-//    var loginPage = open("http://localhost:9999", LoginPageV1.class);
-      var authInfo = DataHelper.getAuthInfo();
-      var verificationPage = loginPage.validLogin(authInfo);
-      var verificationCode = DataHelper.getVerificationCodeFor(authInfo);
-      verificationPage.validVerify(verificationCode);
-    }
 
-  @Test
-  void shouldTransferMoneyBetweenOwnCardsV2() {
-    open("http://localhost:9999");
-    var loginPage = new LoginPageV2();
-//    var loginPage = open("http://localhost:9999", LoginPageV2.class);
-    var authInfo = DataHelper.getAuthInfo();
+  DashboardPage dashboardPage;
+  CardInfo firstCardInfo;
+  CardInfo secondCardInfo;
+
+  @BeforeEach
+  void setup() {
+    var loginPage = open("http://localhost:9999", LoginPageV2.class);
+    var authInfo = getAuthInfo();
     var verificationPage = loginPage.validLogin(authInfo);
-    var verificationCode = DataHelper.getVerificationCodeFor(authInfo);
-    verificationPage.validVerify(verificationCode);
+    var verificationCode = getVerificationCode();
+    dashboardPage = verificationPage.validVerify(verificationCode);
+    firstCardInfo = getFirstCardInfo();
+    secondCardInfo = getSecondCardInfo();
+
   }
 
   @Test
-  void shouldTransferMoneyBetweenOwnCardsV3() {
-    var loginPage = open("http://localhost:9999", LoginPageV3.class);
-    var authInfo = DataHelper.getAuthInfo();
-    var verificationPage = loginPage.validLogin(authInfo);
-    var verificationCode = DataHelper.getVerificationCodeFor(authInfo);
-    verificationPage.validVerify(verificationCode);
+  void shouldTransferFromToSecond() {
+    var firstCardBalance = dashboardPage.getCardBalance(firstCardInfo);
+    var secondCardBalance = dashboardPage.getCardBalance(secondCardInfo);
+    var amount = generateValidAmount(firstCardBalance);
+    var expectedBalanceFirstCard = firstCardBalance - amount;
+    var expectedBalanceSecondCard = secondCardBalance + amount;
+    var transferPage = dashboardPage.selectCardTransfer(secondCardInfo);
+    dashboardPage = transferPage.makeValidTransfer(String.valueOf(amount), firstCardInfo);
+    var actualBalanceFirstCard = dashboardPage.getCardBalance(firstCardInfo);
+    var actualBalanceSecondCard = dashboardPage.getCardBalance(secondCardInfo);
+    assertEquals(expectedBalanceFirstCard, actualBalanceFirstCard);
+    assertEquals(expectedBalanceSecondCard, actualBalanceSecondCard);
   }
+
+  @Test
+  void shouldGetErrorMessageIfAcountMoreBalance() {
+    var firstCardBalance = dashboardPage.getCardBalance(firstCardInfo);
+    var secondCardBalance = dashboardPage.getCardBalance(secondCardInfo);
+    var amount = generateInValidAmount(secondCardBalance);
+    var transferPage = dashboardPage.selectCardTransfer(firstCardInfo);
+    transferPage.makeTransfer(String.valueOf(amount), secondCardInfo);
+    transferPage.findErrorMessage("Выполнена попытка перевода суммы, превышающий остаток на карте списания");
+    var actualBalanceFirstCard = dashboardPage.getCardBalance(firstCardInfo);
+    var actualBalanceSecondCard = dashboardPage.getCardBalance(secondCardInfo);
+    assertEquals(firstCardBalance, actualBalanceFirstCard);
+    assertEquals(secondCardBalance, actualBalanceSecondCard);
+  }
+
 }
 
